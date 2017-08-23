@@ -31,10 +31,22 @@ def bash(cmd, shell=False):
 
 
 def pe(*msg):					
-	''' pe == print and exit '''
+	''' pe: print and exit '''
 	if msg: print msg[0]
 	sys.exit()
 
+
+def format_url(url, href):
+	''' alter url to handle files in parent directories '''
+	print 'url: %s ...... href: %s' % (url,href)
+	url = url.rstrip('/')
+	href = href.lstrip('/')
+	for c in range( href.count('..') ):
+		url = url[ :url.rfind('/') ]
+	href = href.replace('../','')
+	return url, href
+	
+	
 
 def main():
 	
@@ -87,30 +99,40 @@ def main():
 	#	Save href files in appropriate directory
 	
 	href_list = [x[1] for x in re.findall('''href=(?P<quote>["'])(.*?)(?P=quote)''',doc)]
-
-	if not url.endswith('/') : url += '/'
 	
-	dir_contents = bash('ls %s' % title, shell=True)
+	if any([url.endswith(x) for x in ['.html','.htm']]):
+		url = url[:url.rfind('/')]
+	if not url.endswith('/') : url += '/'
+	print 'url: %s' % url
+	dir_contents = bash('ls "%s"' % title, shell=True) 
+	
 	
 	for href in href_list:
-		print 'Looking up: %s' % href
 		if any([
-				'://' 	in href, 
+				'//' 	in href, 
 				'#' 	in href,
 				href 	in dir_contents,
 				href 	== 'index.html'
 			]): 	 continue
+		
 
+		f_url, f_href = format_url(url, href)	#formatted
+		
 		try:
-			r = requests.get(url+href, headers=headers)
+			new_url = '%s/%s' % (f_url, f_href)
+			print 'Trying %s' % new_url
+			r = requests.get(new_url, headers=headers)
 		except Exception as e:
 			pe(e)
-		print 'Page status: %s' % r.status
+		print 'href: %s ..... Page status: %s' % (f_href, r.status_code)
 		
-		with open('%s/%s' % ( title, href ),'w') as f:
-			f.write( r.text.encode('utf8') )
-		sleep(.1)
-		
+		try:
+			with open('%s/%s' % ( title, f_href ),'w') as f:
+				f.write( r.text.encode('utf8') )
+			sleep(.1)
+		except Exception as e:
+			print 'exception raised trying to write to file: \n\t %s/%s \n\t Exception:' % ( title, f_href )
+			print e
 	
 	
 if __name__ == '__main__':
